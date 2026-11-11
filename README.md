@@ -4,6 +4,7 @@
 [![Build System](https://img.shields.io/badge/CMake-3.18%2B-brightgreen.svg)](https://cmake.org/)
 [![Python Extension](https://img.shields.io/badge/Pybind11-v2.13%2B-orange.svg)](https://github.com/pybind/pybind11)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/1453389569.svg)](https://doi.org/10.5281/zenodo.24123292)
 
 **SymNet** is a high-performance, domain-specific compiler and native C++ 17 SIMD runtime engine. It translates symbolic group-theoretic expressions, continuous Lie manifold operators ($SO(2)$ phasors), and non-linear set partitions into constant-time ($O(1)$), zero-branch linear tensor graphs.
 
