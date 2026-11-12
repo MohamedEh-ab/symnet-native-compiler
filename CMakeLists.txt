@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 project(SymNet
-        VERSION 1.0.0
+        VERSION 2.1.0
         DESCRIPTION "Constant-folding, SIMD-friendly C++17 engine for the SymNet DSL"
         LANGUAGES CXX)
 
@@ -95,7 +95,8 @@ if(SYMNET_BUILD_PYTHON)
     endif()
 
     if(pybind11_FOUND)
-      pybind11_add_module(symnet_native MODULE src/bindings.cpp)
+      pybind11_add_module(symnet_native MODULE
+          src/bindings.cpp src/bind_dsl.cpp src/bind_finite_field.cpp)
       target_link_libraries(symnet_native PRIVATE SymNet::native_cpp)
       set_target_properties(symnet_native PROPERTIES
           LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python")

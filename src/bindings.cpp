@@ -4,9 +4,14 @@
 //   symnet_native.eval_word_compiled(k, factors, weight, bias) -> bool
 //   symnet_native.CompiledWord(k, factors)             fold once, decide many times
 //   symnet_native.gemm_count() / reset_gemm_count()    instrumentation (matmul passes executed)
+//   symnet_native.dsl           the DSL interpreter/compiler          (bind_dsl.cpp)
+//   symnet_native.finite_field  exact Frobenius / zeta / Weil passes  (bind_finite_field.cpp)
+//   symnet_native.SymNetError and subclasses: LexError, ParseError, CompileError, SymNetRuntimeError
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
+#include "bindings.hpp"
 
 #include <symnet/MatrixEngine.hpp>
 #include <symnet/WordEval.hpp>
@@ -124,5 +129,8 @@ For repeated decisions on one word use CompiledWord, which folds only once.)doc"
 
     m.def("gemm_count", []() { return gemmCounter(); }, "Matrix-multiplication passes executed so far.");
     m.def("reset_gemm_count", []() { gemmCounter() = 0; });
-    m.attr("__version__") = "1.0.0";
+    m.attr("__version__") = "1.1.0";
+
+    bind_dsl(m);           // also registers the exception hierarchy
+    bind_finite_field(m);
 }

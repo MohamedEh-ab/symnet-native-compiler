@@ -1,4 +1,4 @@
-# SymNet: A Symbolic Neural Compiler for Group-Theoretic Classifiers with an Exact Finite-Field Engine
+# SymNet: A Symbolic DSL Compiler for Group-Theoretic Classifiers with an Exact Finite-Field (Lefschetz / Zeta / Weil) Engine
 
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-17%2F20-blue.svg)](https://en.cppreference.com/w/cpp/17)
 [![Build System](https://img.shields.io/badge/CMake-3.18%2B-brightgreen.svg)](https://cmake.org/)
@@ -10,6 +10,7 @@
 
 1. **The SymNet DSL compiler.** It translates symbolic group-theoretic expressions (finite matrix groups such as $D_4$ and the Klein 4-group), continuous $SO(2)$ phasors, and non-linear set partitions into constant-time linear tensor graphs. A word $g_1 g_2 \cdots g_L$ is folded into **one** $k \times k$ matrix at compile time, so evaluating it costs one matrix pass regardless of $L$ (**145 µs → 9 ns** at $L = 8192$ in the benchmark below).
 2. **The exact finite-field passes (`symnet::ff`).** For an elliptic curve $E: y^2 = x^3 + ax + b$ over $\mathbb{F}_q$, the $q$-power Frobenius is lifted to a $2 \times 2$ integer matrix. Point counts over every extension field, the zeta function, and certificates for the Hasse–Weil bound and the functional equation are then computed in exact 64/128-bit integer arithmetic, with no floating point in any invariant.
+3. **A Python extension (`symnet_native`).** Fixed-size matrices and word folding, the full DSL interpreter/compiler (`symnet_native.dsl`) and the finite-field passes (`symnet_native.finite_field`) are all callable from Python.
 
 ---
 
@@ -73,6 +74,13 @@ of $x^2 - a_q x + q$ as an exact `int64` $2 \times 2$ buffer (`Mat2`).
 9. **Weil prover.** Exact integer checkers for the Hasse–Weil bound ($t^2 \le 4q$, compared as 128-bit integers) and for the genus-1 functional equation $Z(1/(qT)) = Z(T)$, returning structured `PROVED` / `REFUTED` certificates.
 10. **Overflow discipline.** Every kernel is branch-free and carries a sticky overflow flag (`Checked<T>`). A value that cannot be certified inside `int64` is reported as such and never silently wrapped.
 11. **Engine bridge.** `toEngine` / `fromEngine` convert between `ff::Mat2` and `symnet::Matrix2x2` and refuse (return `nullopt`) whenever the conversion would not be exact. `ff::mul` is counted in `symnet::gemmCounter()` like any engine matrix pass.
+
+
+### Python API (new)
+
+12. **`symnet_native.dsl`**: `Interpreter.run()` / `.compile()` over the DSL; navigate `Program → Group → Task → Job`, inspect synthesized lifts, the folded matrix `W_compiled`, and evaluate any job on the folded graph or the Kronecker-expanded reference.
+13. **`symnet_native.finite_field`**: `EllipticCurve`, `lift`, `Mat2`, the Lefschetz / zeta / Weil passes, with `Checked<T>` overflow surfaced as `OverflowError` or `None`, never a wrapped value.
+14. **Typed exceptions**: `SymNetError` with `LexError`, `ParseError`, `CompileError`, `SymNetRuntimeError`.
 
 ---
 
@@ -149,6 +157,20 @@ FrobeniusGenerator::lift()  ──►  FrobeniusNode { F = [[0, −q], [1, a_q]]
 └──► toEngine() / fromEngine()  ⇄  symnet::Matrix2x2   (exact-or-nullopt, |entry| ≤ 2⁵³)
 ```
 
+
+### C. Python binding layer
+
+```
+Python  ──►  src/bindings.cpp ····· symnet_native: Matrix2x2/3x3/4x4, eval_word_compiled, CompiledWord
+        │    src/bind_dsl.cpp ····· symnet_native.dsl ········ ┐  thin pybind11 registration only
+        │    src/bind_finite_field.cpp  symnet_native.finite_field ┘
+        ▼
+include/symnet/Api.hpp   (pure C++ facade, no pybind11 types; unit-tested natively by tests/cpp/test_api.cpp)
+        ├── Interpreter → Program → GroupHandle → TaskHandle → JobHandle → ForwardResult
+        └── ffMul / ffDet / ffAdjugate / ffCharPoly / ffPower   Checked<T> overflow → std::overflow_error → OverflowError
+        ▼
+SymNetInterpreter · SymNetRuntime · ff::* passes   (the engine described above)
+```
 ---
 
 ## Mathematical Background (finite-field passes)
@@ -180,40 +202,47 @@ The commonly misquoted form $Z(1/(qT)) = qT^2 Z(T)$ is **false**: the factor $qT
 SymNet/
 ├── CMakeLists.txt
 ├── README.md
-├── include/
-│   ├── symnet/                       DSL engine (header-only)
-│   │   ├── Common.hpp                errors, formatting, numpy-style rounding
-│   │   ├── MatrixEngine.hpp          Mat<N>, gemm/gemv/dot kernels, DMat, kron, inverse
-│   │   ├── AST.hpp                   Expr tree, Statement variant, ExprProgram (RPN, constant-folded)
-│   │   ├── Lexer.hpp                 regex tokenizer
-│   │   ├── Parser.hpp                recursive-descent parser
-│   │   ├── Compiler.hpp              Network IR, foldNetwork, ContinuousSO2Group, KernelSynthesizer, SymNetCompiler
-│   │   ├── Runtime.hpp               SymNetRuntime (folded + reference + baselines)
-│   │   ├── Interpreter.hpp           SymNetInterpreter, Report
-│   │   ├── WordEval.hpp              fixed-size word folding used by the Python bindings
-│   │   ├── Examples.hpp              built-in DSL demonstration programs
-│       ├── Mat2.hpp                  exact int64 2×2 buffer, Checked<T>, U128, engine bridge
-│       └── finite_field/
-│           ├── FrobeniusGenerator.hpp    EllipticCurveNode → Frobenius companion matrix
-│           ├── LefschetzTracePass.hpp    Tr / det / P(T) / Fⁿ / #E(F_{qⁿ})
-│           ├── ZetaFunctionPass.hpp      closed-form zeta collapse
-│           └── WeilProver.hpp            Hasse–Weil and functional-equation certificates
+├── include/symnet/                       header-only engine
+│   ├── Common.hpp                        errors, formatting, numpy-style rounding
+│   ├── MatrixEngine.hpp                  Mat<N>, gemm/gemv/dot kernels, DMat, kron, inverse
+│   ├── AST.hpp                           Expr tree, Statement variant, ExprProgram (RPN, constant-folded)
+│   ├── Lexer.hpp                         regex tokenizer
+│   ├── Parser.hpp                        recursive-descent parser
+│   ├── Compiler.hpp                      Network IR, foldNetwork, ContinuousSO2Group, KernelSynthesizer, SymNetCompiler
+│   ├── Runtime.hpp                       SymNetRuntime (folded + reference + baselines)
+│   ├── Interpreter.hpp                   SymNetInterpreter, Report
+│   ├── WordEval.hpp                      fixed-size word folding used by the Python bindings
+│   ├── Examples.hpp                      built-in DSL demonstration programs
+│   ├── Api.hpp                           NEW: binding facade (handles + overflow-to-exception wrappers)
+│   ├── Mat2.hpp                          NEW: exact int64 2x2 buffer, Checked<T>, U128, engine bridge
+│   └── finite_field/                     NEW: exact finite-field layer
+│       ├── FrobeniusGenerator.hpp            EllipticCurveNode -> Frobenius companion matrix
+│       ├── LefschetzTracePass.hpp            Tr / det / P(T) / F^n / #E(F_{q^n})
+│       ├── ZetaFunctionPass.hpp              closed-form zeta collapse
+│       └── WeilProver.hpp                    Hasse-Weil and functional-equation certificates
 ├── src/
-│   ├── main.cpp                      symnet_cli
-│   └── bindings.cpp                  pybind11 module `symnet_native`
+│   ├── main.cpp                          symnet_cli
+│   ├── bindings.hpp                      shared declarations + submodule helper
+│   ├── bindings.cpp                      module entry: matrices, word evaluation
+│   ├── bind_dsl.cpp                      NEW: symnet_native.dsl + exception hierarchy
+│   └── bind_finite_field.cpp             NEW: symnet_native.finite_field
 ├── tests/
 │   ├── CMakeLists.txt
 │   ├── cpp/
-│   │   ├── test_engine.cpp               DSL engine unit tests + benchmark
-│   │   ├── finite_field_test.cpp         NEW: brute-force-oracle validation of the ff passes
-│   │   └── engine_integration_test.cpp   NEW: ff (exact int) vs MatrixEngine (double) cross-checks
+│   │   ├── test_engine.cpp                   DSL engine unit tests + benchmark
+│   │   ├── test_api.cpp                      NEW: binding facade tests (what the Python API does)
+│   │   ├── finite_field_test.cpp             NEW: brute-force-oracle validation of the ff passes
+│   │   └── engine_integration_test.cpp       NEW: ff (exact int) vs MatrixEngine (double) cross-checks
 │   └── python/
-│       └── test_bindings.py
+│       └── test_bindings.py                  matrices, word eval, dsl, finite_field
 ├── single_header/
-│   └── symnet_native_single.cpp      generated by scripts/amalgamate.py
+│   └── symnet_native_single.cpp          generated by scripts/amalgamate.py (the CLI program)
 └── scripts/
     └── amalgamate.py
 ```
+
+> **Include root.** The finite-field headers include each other as `symnet/Mat2.hpp` and `symnet/finite_field/*.hpp`, so `include/` must be the include root (the CMake target `SymNet::native_cpp` already does this).
+
 ---
 
 ## Build and Test
@@ -228,7 +257,7 @@ ctest --test-dir build --output-on-failure
 
 Options: `-DSYMNET_NATIVE_ARCH=OFF` (portable binaries), `-DSYMNET_STRICT_FP=ON` (`-ffp-contract=off`, bit-identical to numpy), `-DSYMNET_BUILD_PYTHON=OFF`, `-DSYMNET_FETCH_PYBIND11=OFF`.
 
-**Finite-field tests by hand** (these are header-only; `-I` must point at the directory that contains `symnet/`):
+`ctest` runs the unit tests, the finite-field suites, the facade tests, the single-header build and (when the module was built) the Python tests. **Finite-field tests by hand** (header-only; `-I` must point at the directory that contains `symnet/`):
 
 ```bash
 g++ -std=c++17 -O3 -march=native -Wall -Wextra -I include tests/cpp/finite_field_test.cpp       -o ff_test && ./ff_test
@@ -282,18 +311,38 @@ auto cert = WeilProver::certify(*node);                      // hasse.verdict ==
 
 ### Python
 
-Only the fixed-size matrix types and the word-evaluation functions are exposed (see the tables below).
-
 ```bash
-PYTHONPATH=build/python python3 -c "
-import symnet_native as sn
-r = [0,-1,1,0]; s = [-1,0,0,1]
-print(sn.eval_word_compiled(2, r+s+r, [0,0,0,1], -0.5))   # True: r*s*r == s
-cw = sn.CompiledWord(2, (r+s)*4096)                       # fold once ...
-print(cw.decide([0,0,0,1], -0.5))                         # ... decide with 0 matrix passes"
+PYTHONPATH=build/python python3
 ```
 
-`eval_word_compiled` folds on every call (L matrix passes); `CompiledWord` folds once and then decides in $O(1)$. Install with `cmake --install build --prefix ~/.local`.
+```python
+import symnet_native as sn
+from symnet_native import dsl, finite_field as ff
+
+# --- word folding (fixed-size) ---------------------------------------------------------
+r, s = [0, -1, 1, 0], [-1, 0, 0, 1]
+sn.eval_word_compiled(2, r + s + r, [0, 0, 0, 1], -0.5)     # True: r*s*r == s
+cw = sn.CompiledWord(2, (r + s) * 4096)                     # fold once ...
+cw.decide([0, 0, 0, 1], -0.5)                               # ... decide with 0 matrix passes
+
+# --- the DSL ----------------------------------------------------------------------------
+interp = dsl.Interpreter()
+interp.run(source).passed                                   # run every query in a program
+prog = interp.compile(xor_source)                           # inspect what the synthesizer found
+prog.groups[0].classifiers[0].lifts                         # ['k1 = abs(x - y)']
+job = prog.groups[0].tasks[0].jobs[0]
+job.folded_factors, job.folded_matrix                       # constant folding, visible
+job.evaluate(trace=True).decision                           # one k x k pass
+
+# --- exact finite-field passes ----------------------------------------------------------
+e = ff.EllipticCurve(2, 3, 97)
+node = ff.lift(e.with_trace(-2))                            # F = [[0, -97], [1, -2]]
+ff.count_points(node.F, 3)                                  # 912100  = #E(F_97^3)
+str(ff.zeta_collapse(node.F, 97))                           # '(1 + 2T + 97T^2) / (1 - 98T + 97T^2)'
+ff.certify(node).hasse.verdict                              # Verdict.PROVED
+```
+
+`eval_word_compiled` folds on every call (L matrix passes); `CompiledWord` folds once and then decides in $O(1)$. The trace $a_q$ must be supplied (`with_trace`) or produced by a resolver callable (`e.resolve(fn)`); no point counting is implemented. Install with `cmake --install build --prefix ~/.local`.
 
 ---
 
@@ -337,25 +386,18 @@ group D4 {
 
 ### Python API (`symnet_native`)
 
-**Module-level**
+#### Top level
 
 | Name | Signature | Returns | Description |
 |---|---|---|---|
-| `eval_word_compiled` | `(k, factors, weight, bias)` | `bool` | Decision $\mathrm{Step}(w \cdot \mathrm{vec}(W_{\text{compiled}}) + b)$ for a word. `factors` is $L$ row-major $k \times k$ matrices concatenated in word order (empty list = identity). `weight` has $k^2$ entries. `k` ∈ {2, 3, 4}. Folds on every call. |
+| `eval_word_compiled` | `(k, factors, weight, bias)` | `bool` | Decision $\mathrm{Step}(w \cdot \mathrm{vec}(W_{\text{compiled}}) + b)$ for a word. `factors` is $L$ row-major $k \times k$ matrices concatenated in word order (empty list = identity); `weight` has $k^2$ entries; `k` ∈ {2, 3, 4}. Folds on every call. |
 | `CompiledWord` | `(k, factors)` | object | A word folded once into a single $k \times k$ matrix. |
-| `Matrix2x2`, `Matrix3x3`, `Matrix4x4` | — | classes | Fixed-size row-major `double` matrices. |
-| `gemm_count` | `()` | `int` | Number of $k \times k$ matrix-multiplication passes executed so far. |
-| `reset_gemm_count` | `()` | `None` | Reset that counter to zero. |
-| `__version__` | — | `str` | Module version. |
+| `Matrix2x2`, `Matrix3x3`, `Matrix4x4` | | classes | Fixed-size row-major `double` matrices. |
+| `gemm_count()` / `reset_gemm_count()` | | `int` / `None` | Matrix-multiplication passes executed so far (shared by every submodule). |
+| `dsl`, `finite_field` | | submodules | See below. Also importable as `symnet_native.dsl`, `symnet_native.finite_field`. |
+| `__version__` | | `str` | Module version. |
 
-**`CompiledWord`**
-
-| Member | Kind | Returns | Description |
-|---|---|---|---|
-| `dim` | property | `int` | The dimension $k$. |
-| `length` | property | `int` | Number of factors that were folded. |
-| `matrix` | property | `list[float]` | $W_{\text{compiled}}$, row-major, $k^2$ entries. |
-| `decide(weight, bias)` | method | `bool` | Decision for this word with **0 matrix passes**. |
+**`CompiledWord`**: properties `dim`, `length` (factors folded), `matrix` ($W_{\text{compiled}}$, row-major); method `decide(weight, bias) -> bool` with **0 matrix passes**.
 
 **`Matrix2x2` / `Matrix3x3` / `Matrix4x4`** (replace $N$ by 2, 3 or 4)
 
@@ -366,16 +408,76 @@ group D4 {
 | `from_list(flat)` | static | Build from $N^2$ row-major numbers; `ValueError` otherwise. |
 | `dim` | class property | $N$ (read from the class, e.g. `Matrix3x3.dim`). |
 | `to_list()` | method | Row-major list of $N^2$ floats. |
-| `m[i, j]`, `m[i, j] = v` | item access | Element get/set; `IndexError` if out of range. |
-| `a * b`, `a @ b` | operators | Matrix product (counts one pass in `gemm_count`). |
+| `m[i, j]`, `m[i, j] = v` | item access | Get/set; `IndexError` if out of range. |
+| `a * b`, `a @ b` | operators | Matrix product (counts one pass). |
 | `apply(x)` | method | Matrix-vector product with a length-$N$ list. |
 | `max_abs_diff(other)` | method | $\max_{ij} \lvert a_{ij} - b_{ij} \rvert$. |
 | `a == b` | operator | Exact element-wise equality. |
-| `repr(m)` | — | e.g. `Matrix2x2([[0, -1], [1, 0]])`. |
 
-**Errors.** Invalid `k`, ragged factor lists, or a wrong `weight` length raise `ValueError`.
+#### Exceptions (top level)
 
-> **Not exposed to Python (yet):** the DSL interpreter/compiler (`SymNetInterpreter`, `SymNetCompiler`, the kernel synthesizer) and the finite-field passes. They are C++ APIs; use `symnet_cli` for the DSL.
+| Exception | Raised for |
+|---|---|
+| `SymNetError` | Base class of everything below. |
+| `LexError` | Unexpected character in DSL source. |
+| `ParseError` | Syntax error. |
+| `CompileError` | Unknown names, dimension mismatches, no separating lift, ... |
+| `SymNetRuntimeError` | Run-time errors, e.g. `Job.decide()` on a job with no hyperplane. |
+| `ValueError`, `IndexError` | Bad sizes / indices on matrix types and `finite_field.Mat2`. |
+| `OverflowError` | A `finite_field` result that does not fit in `int64`. |
+
+#### `symnet_native.dsl`
+
+| Name | Signature | Returns | Description |
+|---|---|---|---|
+| `Interpreter` | `(sharpness=10.0)` | object | Lex, parse, compile, fold and run DSL programs. `sharpness` is the slope of the soft sigmoid score. |
+| `Interpreter.run` | `(source, transcript=False)` | `RunResult` | Compile and run every query. `transcript=True` captures the full Python-style transcript. |
+| `Interpreter.compile` | `(source)` | `Program` | Compile without running. |
+| `tokenize` | `(source)` | `list[(kind, text, line)]` | `kind` is `'number'`, `'ident'`, `'symbol'` or `'eof'`. |
+
+| Class | Members |
+|---|---|
+| `RunResult` | `passed`, `failed`, `x_checked`, `x_failed` (folded-vs-reference equivalence checks / mismatches), `transcript`, `ok` |
+| `Program` | `groups` → `list[Group]` |
+| `Group` | `name`, `declarations` (compiler log incl. `[synth]` lines), `classifiers` → `list[Classifier]` (sorted by name), `tasks` → `list[Task]` |
+| `Classifier` | `name`, `weight`, `bias`, `lifts` (e.g. `['k1 = abs(x - y)']`), `is_sector` |
+| `Task` | `kind` (`'job'`, `'verify'` batch, `'check'` = lhs, rhs), `label`, `jobs` → `list[Job]` |
+| `Job` | `kind` (`'eval'`/`'classify'`), `label`, `short_label`, `expected`, `input`, `element_mode`, `dim`, `matrix_shape`, `architecture` (unfolded), `folded_architecture`, `folded_factors`, `folded_matrix` ($W_{\text{compiled}}$); methods `evaluate(trace=False, reference=False) -> ForwardResult`, `decide() -> bool` |
+| `ForwardResult` | `input_vector`, `final_vector`, `decision`, `score`, `soft_score` (the last three are `None` for `eval` jobs), `trace` → `list[(label, vector)]` |
+
+`Job.evaluate()` runs the constant-folded graph (one $k \times k$ pass); `reference=True` runs the unfolded Kronecker-expanded oracle, which yields the per-layer trace.
+
+#### `symnet_native.finite_field`
+
+| Name | Signature | Returns | Description |
+|---|---|---|---|
+| `EllipticCurve` | `(a, b, q)` | object | $y^2 = x^3 + ax + b$ over $\mathbb{F}_q$; properties `a`, `b`, `q`, `trace` (`None` if unresolved); methods `valid()`, `with_trace(a_q)`, `resolve(resolver)`. |
+| `schoof_trace_stub` | `(curve)` | `None` | Explicit stub resolver; no point counting is implemented. |
+| `lift` | `(curve)` | `FrobeniusNode \| None` | $F = \begin{pmatrix}0 & -q\\ 1 & a_q\end{pmatrix}$; `None` if invalid or the trace is unresolved. |
+| `lift_to_engine` | `(curve)` | `Matrix2x2 \| None` | Same lift as a double matrix; `None` if an entry exceeds $2^{53}$. |
+| `trace` | `(F)` | `int` | $\operatorname{Tr}F$. |
+| `determinant` | `(F)` | `int` | $\det F$; `OverflowError` if not exact. |
+| `characteristic_polynomial` | `(F)` | `Poly2` | $P(T) = 1 - tT + \det(F)\,T^2$. |
+| `power` | `(F, n)` | `Mat2` | $F^n$ (≤ 64 steps); `OverflowError` if a needed intermediate leaves `int64`. |
+| `trace_of_power` | `(F, n)` | `int \| None` | $\operatorname{Tr}(F^n)$; `None` on overflow. |
+| `count_points` | `(F, n)` | `int \| None` | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$; `None` for $n = 0$ or if not certifiable. |
+| `zeta_collapse` | `(F, q)` | `ZetaNode \| None` | Closed-form zeta function; `None` if $\det F \ne q$ or on overflow. |
+| `prove_hasse_weil` | `(F, q)` | `HasseWeilReport` | Exact check of $\det F = q$ and $t^2 \le 4q$. |
+| `prove_functional_equation` | `(F, q)` | `FunctionalEquationReport` | Exact check of $Z(1/(qT)) = Z(T)$. |
+| `certify` | `(node)` | `WeilCertificate` | Both checks for a `FrobeniusNode`. |
+
+| Class | Members |
+|---|---|
+| `Mat2` | `Mat2()` identity, `Mat2(m00, m01, m10, m11)`, `identity()`, `from_list(flat)`, `to_list()`, `m[i, j]`, `a * b` / `a @ b` / `a - b` (`OverflowError` on overflow), `mul_checked(other) -> (Mat2, overflowed)`, `det()`, `adjugate()`, `transpose()`, `to_engine() -> Matrix2x2 \| None`, `from_engine(m)` (static), `==` |
+| `Poly2` | `Poly2(c0, c1, c2)`, `c0`, `c1`, `c2`, `coefficients`, `==`, `str()` |
+| `FrobeniusNode` | `FrobeniusNode(F, q)`, `F`, `q` |
+| `ZetaNode` | `num`, `den` (both `Poly2`), `str()` → `'(1 + 2T + 97T^2) / (1 - 98T + 97T^2)'` |
+| `Verdict` | enum `REFUTED`, `PROVED`; `bool(v)` is `True` for `PROVED` |
+| `HasseWeilReport` | `verdict`, `trace`, `det_is_q`, `delta_negative`, `delta_zero`, `overflow` |
+| `FunctionalEquationReport` | `verdict`, `inverse_collapse`, `weil_pairing`, `numerator_reflects`, `denominator_reflects`, `overflow` |
+| `WeilCertificate` | `hasse`, `functional_equation` |
+
+`EllipticCurve.resolve(resolver)` takes any callable `resolver(curve) -> int | None` (a Schoof/SEA implementation, a lookup table, ...).
 
 ### C++ API: DSL engine
 
@@ -479,7 +581,10 @@ The folded pass stays at about 9 ns from $L = 3$ to $L = 8192$. Reproduce with `
 | DSL engine | `tests/cpp/test_engine.cpp` (`--quick`) | 1,553 | XOR / Klein-4 / $D_4$ lift synthesis, one-pass folding, $SO(2)$ composition to $< 10^{-15}$, dense sector sweeps, folded ≡ reference |
 | Finite field | `tests/cpp/finite_field_test.cpp` | 48,209 | All 3,190 nonsingular curves over $\mathbb{F}p$, $p \in {5,\dots,31}$: trace, $\det$, $P(T)$, $\\#E(\mathbb{F}p)$, both Weil theorems, zeta recurrence $kZ_k = \sum N_j Z{k-j}$; $\\#E(\mathbb{F}{p^2})$ vs a direct count over $\mathbb{F}{p^2}$; worked example over $\mathbb{F}{97}$; negative tests |
 | Exact vs engine | `tests/cpp/engine_integration_test.cpp` | 22,470 | `ff::mul` / `ff::power` agree with `symnet::Matrix2x2` and `symnet::inverse` where doubles are exact; conversions refuse inexact values; large $q \approx 2^{62}$ is certified by the exact path while the double engine refuses it |
-| Python | `tests/python/test_bindings.py` | — | Matrix types, `eval_word_compiled`, `CompiledWord` (8192 factors fold once; 10,000 `decide()` calls use 0 passes) |
+| Binding facade | `tests/cpp/test_api.cpp` | 53 | Everything the Python `dsl` / `finite_field` API does, tested natively: tokenizer, `run`, error classes, synthesized-lift inspection, folded matrix, one-pass evaluation, folded ≡ reference, `Checked<T>` → `OverflowError` |
+| Python | `tests/python/test_bindings.py` | 77 | Matrix types, `eval_word_compiled`, `CompiledWord` (8192 factors fold once; 10,000 `decide()` calls use 0 passes), the `dsl` and `finite_field` APIs, exception hierarchy |
+
+All six CTest suites (unit tests, finite field, engine integration, binding facade, single-header build, Python bindings) pass in a CMake build against a real pybind11 on Linux (WSL), including the 77 Python-side checks.
 
 The brute-force point counters in `finite_field_test.cpp` are **test-only oracles**; the headers contain no point-counting loop. The finite-field counts above were obtained with `g++ 13 -O3 -march=native`, and the 48,209 checks also passed with the AVX2 and `__builtin_mul_overflow` paths disabled (`-mno-avx2 -DSYMNET_FF_PORTABLE_ARITH`).
 
@@ -491,7 +596,7 @@ The brute-force point counters in `finite_field_test.cpp` are **test-only oracle
 - **$F^n$ is not $O(1)$ in $n$.** $\mathrm{Tr}(F^n)$ has $\Theta(n \log q)$ bits, so exact output cannot be constant-time. The cost is at most 64 binary-exponentiation steps, and results that leave `int64` are reported as `nullopt`/`overflow`, never wrapped (for $q = 97$, `count_points` stops being certifiable by $n = 40$).
 - **The $2 \times 2$ matrix is a representative.** Frobenius is defined only up to $GL_2(\mathbb{Q}_\ell)$-conjugacy. Its entries carry no meaning; its conjugation invariants (trace, determinant, characteristic polynomial, traces of powers, the zeta function) are the meaningful content.
 - **Preconditions.** $q$ must be an odd prime with $3 < q \le 2^{62}$; primality is assumed, not tested.
-- **The finite-field passes and the DSL interpreter are not yet bound to Python. (WIP)** The Python module exposes the fixed-size matrices and word evaluation only.
+- **Python `Program` objects are snapshots.** Each `Job` owns a private copy of its compiled graph; compiling a very large program therefore costs memory proportional to the number of jobs. The DSL AST itself is not exposed to Python.
 - **`eval_word_compiled` supports $k \in \{2, 3, 4\}$** (fixed-size buffers) and folds on every call.
 - **Floating-point reproducibility.** With `-march=native`, fused multiply-add can change the last digit versus numpy; use `-DSYMNET_STRICT_FP=ON` for bit-identical results. The exact `ff` path is unaffected, since it uses no floating point.
 
