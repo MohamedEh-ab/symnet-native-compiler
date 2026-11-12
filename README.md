@@ -58,7 +58,7 @@
 ### Exact finite-field passes (new)
 
 6. **Frobenius lift.** `EllipticCurveNode` → `FrobeniusGenerator::lift` produces the companion matrix $F_q = \begin{pmatrix} 0 & -q \\ 1 & a_q \end{pmatrix}$ of $x^2 - a_q x + q$ as an exact `int64` $2 \times 2$ buffer (`Mat2`).
-7. **Lefschetz trace pass.** $\operatorname{Tr}F$, $\det F$, $P(T) = \det(I - TF)$, $F^n$ by branch-free binary exponentiation, and $\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$. An AVX2 path is used for $\operatorname{Tr}F$ when available.
+7. **Lefschetz trace pass.** $\mathrm{Tr}F$, $\det F$, $P(T) = \det(I - TF)$, $F^n$ by branch-free binary exponentiation, and $\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$. An AVX2 path is used for $\mathrm{Tr}F$ when available.
 8. **Zeta collapse.** The series $\exp\!\big(\sum N_n T^n / n\big)$ is never summed. The pass emits the closed form $Z(T) = \dfrac{1 - tT + qT^2}{(1 - T)(1 - qT)}$ directly.
 9. **Weil prover.** Exact integer checkers for the Hasse–Weil bound ($t^2 \le 4q$, compared as 128-bit integers) and for the genus-1 functional equation $Z(1/(qT)) = Z(T)$, returning structured `PROVED` / `REFUTED` certificates.
 10. **Overflow discipline.** Every kernel is branch-free and carries a sticky overflow flag (`Checked<T>`). A value that cannot be certified inside `int64` is reported as such and never silently wrapped.
@@ -143,13 +143,13 @@ FrobeniusGenerator::lift()  ──►  FrobeniusNode { F = [[0, −q], [1, a_q]]
 
 ## Mathematical Background (finite-field passes)
 
-For a prime $\ell \neq \operatorname{char}\mathbb{F}_q$, $H^1_{\text{ét}}(E_{\overline{\mathbb{F}}_q}, \mathbb{Q}_\ell)$ is 2-dimensional and the Frobenius acts on it by a $2 \times 2$ matrix $F$. Three facts drive every pass:
+For a prime $\ell \neq \mathrm{char}\mathbb{F}_q$, $H^1_{\text{ét}}(E_{\overline{\mathbb{F}}_q}, \mathbb{Q}_\ell)$ is 2-dimensional and the Frobenius acts on it by a $2 \times 2$ matrix $F$. Three facts drive every pass:
 
 | Fact | Statement |
 |---|---|
-| Lefschetz fixed-point formula | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \operatorname{Tr}(F^n)$ |
+| Lefschetz fixed-point formula | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \mathrm{Tr}(F^n)$ |
 | Poincaré duality / Weil pairing | $\det F = q$, and $F^{\mathsf T} J F = qJ$ with $J = \begin{pmatrix} 0 & 1 \\ -1 & 0 \end{pmatrix}$ |
-| Integrality | $\operatorname{Tr}F = a_q = q + 1 - \#E(\mathbb{F}_q)$ is an integer independent of $\ell$ |
+| Integrality | $\mathrm{Tr}F = a_q = q + 1 - \#E(\mathbb{F}_q)$ is an integer independent of $\ell$ |
 
 **Zeta function.** Since $\sum_{n \ge 1} c^n T^n / n = -\log(1 - cT)$, the series splits term by term and
 $$Z(E/\mathbb{F}_q, T) = \frac{\det(I - TF)}{(1 - T)(1 - qT)} = \frac{1 - tT + qT^2}{(1 - T)(1 - qT)}.$$
@@ -421,11 +421,11 @@ All symbols are in `namespace symnet::ff`.
 
 | Function | Returns | Description |
 |---|---|---|
-| `trace(F)` | `int64` | $\operatorname{Tr}F$ (AVX2 diagonal sum when available). |
+| `trace(F)` | `int64` | $\mathrm{Tr}F$ (AVX2 diagonal sum when available). |
 | `determinant(F)` | `Checked<int64>` | $\det F$. |
 | `characteristic_polynomial(F)` | `Checked<Poly2>` | $P(T) = 1 - tT + \det(F)\,T^2$. |
 | `power(F, n)` | `Checked<Mat2>` | $F^n$, binary exponentiation (≤ 64 steps), branch-free. |
-| `trace_of_power(F, n)` | `optional<int64>` | $\operatorname{Tr}(F^n) = \alpha^n + \beta^n$; `nullopt` on overflow. |
+| `trace_of_power(F, n)` | `optional<int64>` | $\mathrm{Tr}(F^n) = \alpha^n + \beta^n$; `nullopt` on overflow. |
 | `count_points(F, n)` | `optional<int64>` | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$; `nullopt` for $n = 0$ or if not certifiable in `int64`. |
 
 **`finite_field/ZetaFunctionPass.hpp`**
@@ -478,7 +478,7 @@ The brute-force point counters in `finite_field_test.cpp` are **test-only oracle
 ## Limitations and Honest Notes
 
 - **Computing $a_q$ is not $O(1)$.** Schoof/SEA is polynomial in $\log q$. The library carries the trace as an externally supplied value (`with_trace` or a `TraceResolver`); `schoof_trace_stub` is an explicit placeholder, and no point-counting loop exists in the headers.
-- **$F^n$ is not $O(1)$ in $n$.** $\operatorname{Tr}(F^n)$ has $\Theta(n \log q)$ bits, so exact output cannot be constant-time. The cost is at most 64 binary-exponentiation steps, and results that leave `int64` are reported as `nullopt`/`overflow`, never wrapped (for $q = 97$, `count_points` stops being certifiable by $n = 40$).
+- **$F^n$ is not $O(1)$ in $n$.** $\mathrm{Tr}(F^n)$ has $\Theta(n \log q)$ bits, so exact output cannot be constant-time. The cost is at most 64 binary-exponentiation steps, and results that leave `int64` are reported as `nullopt`/`overflow`, never wrapped (for $q = 97$, `count_points` stops being certifiable by $n = 40$).
 - **The $2 \times 2$ matrix is a representative.** Frobenius is defined only up to $GL_2(\mathbb{Q}_\ell)$-conjugacy. Its entries carry no meaning; its conjugation invariants (trace, determinant, characteristic polynomial, traces of powers, the zeta function) are the meaningful content.
 - **Preconditions.** $q$ must be an odd prime with $3 < q \le 2^{62}$; primality is assumed, not tested.
 - **The finite-field passes and the DSL interpreter are not yet bound to Python. (WIP)** The Python module exposes the fixed-size matrices and word evaluation only.
@@ -511,7 +511,7 @@ The brute-force point counters in `finite_field_test.cpp` are **test-only oracle
 | **Klein 4-group** | $V = \{I, a, b, ab\}$, here realised as diagonal sign matrices. |
 | **Kernel synthesizer** | The compiler stage that proves non-separability and injects the minimum lift layers needed. |
 | **Kronecker expansion** | The dense $\mathrm{kron}(W, I)$ matrix the engine avoids at run time ($O(k^4)$ vs $O(k^3)$). |
-| **Lefschetz trace formula** | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \operatorname{Tr}(F^n)$. |
+| **Lefschetz trace formula** | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \mathrm{Tr}(F^n)$. |
 | **Lift (feature lift)** | A non-linear coordinate (e.g. `abs(x - y)`) appended to the feature vector so a partition becomes linearly separable. |
 | **Matrix pass** | One $k \times k$ product or mat-vec, counted by `symnet::gemmCounter()`. |
 | **Novikoff cycle detection** | The perceptron cycling theorem: a repeated weight vector after an update certifies non-separability. |
