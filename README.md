@@ -1,4 +1,4 @@
-# SymNet: A Symbolic DSL Compiler for Group-Theoretic Classifiers with an Exact Finite-Field (Lefschetz / Zeta / Weil) Engine
+# SymNet: A Symbolic neural DSL Compiler for Group-Theoretic Classifiers with an Exact Finite-Field (Lefschetz / Zeta / Weil) Engine
 
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-17%2F20-blue.svg)](https://en.cppreference.com/w/cpp/17)
 [![Build System](https://img.shields.io/badge/CMake-3.18%2B-brightgreen.svg)](https://cmake.org/)
