@@ -57,7 +57,17 @@
 
 ### Exact finite-field passes (new)
 
-6. **Frobenius lift.** `EllipticCurveNode` → `FrobeniusGenerator::lift` produces the companion matrix $F_q = \begin{pmatrix} 0 & -q \\ 1 & a_q \end{pmatrix}$ of $x^2 - a_q x + q$ as an exact `int64` $2 \times 2$ buffer (`Mat2`).
+6. **Frobenius lift.** `EllipticCurveNode` → `FrobeniusGenerator::lift` produces the companion matrix
+
+$$
+F_q = \begin{pmatrix} 
+0 & -q \\ 
+1 & a_q 
+\end{pmatrix}
+$$
+
+of $x^2 - a_q x + q$ as an exact `int64` $2 \times 2$ buffer (`Mat2`).
+
 7. **Lefschetz trace pass.** $\mathrm{Tr}F$, $\det F$, $P(T) = \det(I - TF)$, $F^n$ by branch-free binary exponentiation, and $\\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$. An AVX2 path is used for $\mathrm{Tr}F$ when available.
 8. **Zeta collapse.** The series $\exp\!\big(\sum N_n T^n / n\big)$ is never summed. The pass emits the closed form $Z(T) = \dfrac{1 - tT + qT^2}{(1 - T)(1 - qT)}$ directly.
 9. **Weil prover.** Exact integer checkers for the Hasse–Weil bound ($t^2 \le 4q$, compared as 128-bit integers) and for the genus-1 functional equation $Z(1/(qT)) = Z(T)$, returning structured `PROVED` / `REFUTED` certificates.
