@@ -153,7 +153,7 @@ FrobeniusGenerator::lift()  ──►  FrobeniusNode { F = [[0, −q], [1, a_q]]
 
 ## Mathematical Background (finite-field passes)
 
-For a prime $\ell \neq \mathrm{char}\mathbb{F}_q$, $H^1_{\text{ét}}(E_{\overline{\mathbb{F}}_q}, \mathbb{Q}_\ell)$ is 2-dimensional and the Frobenius acts on it by a $2 \times 2$ matrix $F$. Three facts drive every pass:
+For a prime $\ell \neq \mathrm{char}\mathbb{F}q$, $H^1{\text{ét}}(E_{\overline{\mathbb{F}}q}, \mathbb{Q}\ell)$ is 2-dimensional and the Frobenius acts on it by a $2 \times 2$ matrix $F$. Three facts drive every pass:
 
 | Fact | Statement |
 |---|---|
@@ -162,13 +162,13 @@ For a prime $\ell \neq \mathrm{char}\mathbb{F}_q$, $H^1_{\text{ét}}(E_{\overlin
 | Integrality | $\mathrm{Tr}F = a_q = q + 1 - \\#E(\mathbb{F}_q)$ is an integer independent of $\ell$ |
 
 **Zeta function.** Since $\sum_{n \ge 1} c^n T^n / n = -\log(1 - cT)$, the series splits term by term and
-$$Z(E/\mathbb{F}_q, T) = \frac{\det(I - TF)}{(1 - T)(1 - qT)} = \frac{1 - tT + qT^2}{(1 - T)(1 - qT)}.$$
+$Z(E/\mathbb{F}_q, T) = \frac{\det(I - TF)}{(1 - T)(1 - qT)} = \frac{1 - tT + qT^2}{(1 - T)(1 - qT)}.$
 
 **Hasse–Weil (Theorem 1).** With $\Delta = t^2 - 4q$: $\Delta \le 0 \iff |\alpha| = |\beta| = \sqrt{q} \iff |t| \le 2\sqrt{q}$. $t^2$ and $4q$ are compared as 128-bit integers, so there is no square root and no overflow.
 
 **Functional equation (Theorem 2, corrected form).** For genus 1 the relation is
-$$Z(E, 1/(qT)) = Z(E, T).$$
-The commonly misquoted form $Z(1/(qT)) = qT^2 Z(T)$ is **false**: the factor $qT^2$ belongs to the numerator and denominator separately ($qT^2 P(1/(qT)) = P(T)$ and $qT^2 D(1/(qT)) = D(T)$). The test suite checks this on exact rationals and confirms the literal form fails.
+$Z(E, 1/(qT)) = Z(E, T).$
+The commonly misquoted form $Z(1/(qT)) = qT^2 Z(T)$ is **false**: the factor $qT^2$ belongs to the numerator and denominator separately $qT^2 P(1/(qT)) = P(T)$ and $qT^2 D(1/(qT)) = D(T)$. The test suite checks this on exact rationals and confirms the literal form fails.
 
 > **What "PROVED" means.** Hasse (1933) and Weil (1948) proved these statements long ago. The passes *check*, exactly and in integers, that a given $(F, q)$ satisfies them. With a correct trace the Hasse check must pass; a failure signals a wrong trace or a non-Frobenius matrix, never a counterexample to Weil.
 
@@ -424,7 +424,7 @@ All symbols are in `namespace symnet::ff`.
 | `schoof_trace_stub` | Explicit stub that always returns `nullopt`. |
 | `FrobeniusNode` | `{ Mat2 F; int64 q; }` |
 | `FiniteFieldNode` | `std::variant<EllipticCurveNode, FrobeniusNode>` |
-| `FrobeniusGenerator::lift(curve)` | → `optional<FrobeniusNode>`, $F = \begin{pmatrix}0 & -q\\ 1 & a_q\end{pmatrix}$; `nullopt` if invalid or trace unresolved. Also accepts a `FiniteFieldNode`. |
+| `FrobeniusGenerator::lift(curve)` | → `optional<FrobeniusNode>`; `nullopt` if invalid or trace unresolved. Also accepts a `FiniteFieldNode`. |
 | `FrobeniusGenerator::lift_to_engine(curve)` | Same lift as `symnet::Matrix2x2`; `nullopt` if an entry exceeds $2^{53}$. |
 
 **`finite_field/LefschetzTracePass.hpp`**
@@ -432,8 +432,8 @@ All symbols are in `namespace symnet::ff`.
 | Function | Returns | Description |
 |---|---|---|
 | `trace(F)` | `int64` | $\mathrm{Tr}F$ (AVX2 diagonal sum when available). |
-| `determinant(F)` | `Checked<int64>` | $\det F$. |
-| `characteristic_polynomial(F)` | `Checked<Poly2>` | $P(T) = 1 - tT + \det(F)\,T^2$. |
+| `determinant(F)` | `Checked<int64>` | $\\det F$. |
+| `characteristic_polynomial(F)` | `Checked<Poly2>` | $P(T) = 1 - tT + \\det(F)\,T^2$. |
 | `power(F, n)` | `Checked<Mat2>` | $F^n$, binary exponentiation (≤ 64 steps), branch-free. |
 | `trace_of_power(F, n)` | `optional<int64>` | $\mathrm{Tr}(F^n) = \alpha^n + \beta^n$; `nullopt` on overflow. |
 | `count_points(F, n)` | `optional<int64>` | $\\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$; `nullopt` for $n = 0$ or if not certifiable in `int64`. |
@@ -477,7 +477,7 @@ The folded pass stays at about 9 ns from $L = 3$ to $L = 8192$. Reproduce with `
 | Suite | File | Checks | What it establishes |
 |---|---|---:|---|
 | DSL engine | `tests/cpp/test_engine.cpp` (`--quick`) | 1,553 | XOR / Klein-4 / $D_4$ lift synthesis, one-pass folding, $SO(2)$ composition to $< 10^{-15}$, dense sector sweeps, folded ≡ reference |
-| Finite field | `tests/cpp/finite_field_test.cpp` | 48,209 | All 3,190 nonsingular curves over $\mathbb{F}_p$, $p \in \{5,\dots,31\}$: trace, $\det$, $P(T)$, $\\#E(\mathbb{F}_p)$, both Weil theorems, zeta recurrence $kZ_k = \sum N_j Z_{k-j}$; $\\#E(\mathbb{F}_{p^2})$ vs a direct count over $\mathbb{F}_{p^2}$; worked example over $\mathbb{F}_{97}$; negative tests |
+| Finite field | `tests/cpp/finite_field_test.cpp` | 48,209 | All 3,190 nonsingular curves over $\mathbb{F}p$, $p \in {5,\dots,31}$: trace, $\det$, $P(T)$, $\\#E(\mathbb{F}p)$, both Weil theorems, zeta recurrence $kZ_k = \sum N_j Z{k-j}$; $\\#E(\mathbb{F}{p^2})$ vs a direct count over $\mathbb{F}{p^2}$; worked example over $\mathbb{F}{97}$; negative tests |
 | Exact vs engine | `tests/cpp/engine_integration_test.cpp` | 22,470 | `ff::mul` / `ff::power` agree with `symnet::Matrix2x2` and `symnet::inverse` where doubles are exact; conversions refuse inexact values; large $q \approx 2^{62}$ is certified by the exact path while the double engine refuses it |
 | Python | `tests/python/test_bindings.py` | — | Matrix types, `eval_word_compiled`, `CompiledWord` (8192 factors fold once; 10,000 `decide()` calls use 0 passes) |
 
