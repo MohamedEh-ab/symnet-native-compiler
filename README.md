@@ -58,7 +58,7 @@
 ### Exact finite-field passes (new)
 
 6. **Frobenius lift.** `EllipticCurveNode` → `FrobeniusGenerator::lift` produces the companion matrix $F_q = \begin{pmatrix} 0 & -q \\ 1 & a_q \end{pmatrix}$ of $x^2 - a_q x + q$ as an exact `int64` $2 \times 2$ buffer (`Mat2`).
-7. **Lefschetz trace pass.** $\mathrm{Tr}F$, $\det F$, $P(T) = \det(I - TF)$, $F^n$ by branch-free binary exponentiation, and $\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$. An AVX2 path is used for $\mathrm{Tr}F$ when available.
+7. **Lefschetz trace pass.** $\mathrm{Tr}F$, $\det F$, $P(T) = \det(I - TF)$, $F^n$ by branch-free binary exponentiation, and $\\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$. An AVX2 path is used for $\mathrm{Tr}F$ when available.
 8. **Zeta collapse.** The series $\exp\!\big(\sum N_n T^n / n\big)$ is never summed. The pass emits the closed form $Z(T) = \dfrac{1 - tT + qT^2}{(1 - T)(1 - qT)}$ directly.
 9. **Weil prover.** Exact integer checkers for the Hasse–Weil bound ($t^2 \le 4q$, compared as 128-bit integers) and for the genus-1 functional equation $Z(1/(qT)) = Z(T)$, returning structured `PROVED` / `REFUTED` certificates.
 10. **Overflow discipline.** Every kernel is branch-free and carries a sticky overflow flag (`Checked<T>`). A value that cannot be certified inside `int64` is reported as such and never silently wrapped.
@@ -147,9 +147,9 @@ For a prime $\ell \neq \mathrm{char}\mathbb{F}_q$, $H^1_{\text{ét}}(E_{\overlin
 
 | Fact | Statement |
 |---|---|
-| Lefschetz fixed-point formula | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \mathrm{Tr}(F^n)$ |
+| Lefschetz fixed-point formula | $\\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \mathrm{Tr}(F^n)$ |
 | Poincaré duality / Weil pairing | $\det F = q$, and $F^{\mathsf T} J F = qJ$ with $J = \begin{pmatrix} 0 & 1 \\ -1 & 0 \end{pmatrix}$ |
-| Integrality | $\mathrm{Tr}F = a_q = q + 1 - \#E(\mathbb{F}_q)$ is an integer independent of $\ell$ |
+| Integrality | $\mathrm{Tr}F = a_q = q + 1 - \\#E(\mathbb{F}_q)$ is an integer independent of $\ell$ |
 
 **Zeta function.** Since $\sum_{n \ge 1} c^n T^n / n = -\log(1 - cT)$, the series splits term by term and
 $$Z(E/\mathbb{F}_q, T) = \frac{\det(I - TF)}{(1 - T)(1 - qT)} = \frac{1 - tT + qT^2}{(1 - T)(1 - qT)}.$$
@@ -426,7 +426,7 @@ All symbols are in `namespace symnet::ff`.
 | `characteristic_polynomial(F)` | `Checked<Poly2>` | $P(T) = 1 - tT + \det(F)\,T^2$. |
 | `power(F, n)` | `Checked<Mat2>` | $F^n$, binary exponentiation (≤ 64 steps), branch-free. |
 | `trace_of_power(F, n)` | `optional<int64>` | $\mathrm{Tr}(F^n) = \alpha^n + \beta^n$; `nullopt` on overflow. |
-| `count_points(F, n)` | `optional<int64>` | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$; `nullopt` for $n = 0$ or if not certifiable in `int64`. |
+| `count_points(F, n)` | `optional<int64>` | $\\#E(\mathbb{F}_{q^n}) = \det(I - F^n)$; `nullopt` for $n = 0$ or if not certifiable in `int64`. |
 
 **`finite_field/ZetaFunctionPass.hpp`**
 
@@ -467,7 +467,7 @@ The folded pass stays at about 9 ns from $L = 3$ to $L = 8192$. Reproduce with `
 | Suite | File | Checks | What it establishes |
 |---|---|---:|---|
 | DSL engine | `tests/cpp/test_engine.cpp` (`--quick`) | 1,553 | XOR / Klein-4 / $D_4$ lift synthesis, one-pass folding, $SO(2)$ composition to $< 10^{-15}$, dense sector sweeps, folded ≡ reference |
-| Finite field | `tests/cpp/finite_field_test.cpp` | 48,209 | All 3,190 nonsingular curves over $\mathbb{F}_p$, $p \in \{5,\dots,31\}$: trace, $\det$, $P(T)$, $\#E(\mathbb{F}_p)$, both Weil theorems, zeta recurrence $kZ_k = \sum N_j Z_{k-j}$; $\#E(\mathbb{F}_{p^2})$ vs a direct count over $\mathbb{F}_{p^2}$; worked example over $\mathbb{F}_{97}$; negative tests |
+| Finite field | `tests/cpp/finite_field_test.cpp` | 48,209 | All 3,190 nonsingular curves over $\mathbb{F}_p$, $p \in \{5,\dots,31\}$: trace, $\det$, $P(T)$, $\\#E(\mathbb{F}_p)$, both Weil theorems, zeta recurrence $kZ_k = \sum N_j Z_{k-j}$; $\\#E(\mathbb{F}_{p^2})$ vs a direct count over $\mathbb{F}_{p^2}$; worked example over $\mathbb{F}_{97}$; negative tests |
 | Exact vs engine | `tests/cpp/engine_integration_test.cpp` | 22,470 | `ff::mul` / `ff::power` agree with `symnet::Matrix2x2` and `symnet::inverse` where doubles are exact; conversions refuse inexact values; large $q \approx 2^{62}$ is certified by the exact path while the double engine refuses it |
 | Python | `tests/python/test_bindings.py` | — | Matrix types, `eval_word_compiled`, `CompiledWord` (8192 factors fold once; 10,000 `decide()` calls use 0 passes) |
 
@@ -511,7 +511,7 @@ The brute-force point counters in `finite_field_test.cpp` are **test-only oracle
 | **Klein 4-group** | $V = \{I, a, b, ab\}$, here realised as diagonal sign matrices. |
 | **Kernel synthesizer** | The compiler stage that proves non-separability and injects the minimum lift layers needed. |
 | **Kronecker expansion** | The dense $\mathrm{kron}(W, I)$ matrix the engine avoids at run time ($O(k^4)$ vs $O(k^3)$). |
-| **Lefschetz trace formula** | $\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \mathrm{Tr}(F^n)$. |
+| **Lefschetz trace formula** | $\\#E(\mathbb{F}_{q^n}) = \det(I - F^n) = q^n + 1 - \mathrm{Tr}(F^n)$. |
 | **Lift (feature lift)** | A non-linear coordinate (e.g. `abs(x - y)`) appended to the feature vector so a partition becomes linearly separable. |
 | **Matrix pass** | One $k \times k$ product or mat-vec, counted by `symnet::gemmCounter()`. |
 | **Novikoff cycle detection** | The perceptron cycling theorem: a repeated weight vector after an update certifies non-separability. |
@@ -521,7 +521,7 @@ The brute-force point counters in `finite_field_test.cpp` are **test-only oracle
 | **Sector** | A closed arc $[\text{lo}, \text{hi}]$ of the circle $SO(2)$. |
 | **$SO(2)$** | The circle group of planar rotations, isomorphic to $U(1)$. |
 | **Supersingular** | The case $\Delta = 0$ with $q$ a square ($t^2 = 4q$). |
-| **Trace $a_q$** | $q + 1 - \#E(\mathbb{F}_q)$; the integer trace of Frobenius. |
+| **Trace $a_q$** | $q + 1 - \\#E(\mathbb{F}_q)$; the integer trace of Frobenius. |
 | **`U128`** | Portable 128-bit unsigned pair used for the overflow-free comparison $t^2$ vs $4q$. |
 | **Verdict** | `PROVED` / `REFUTED` result of a Weil check. |
 | **Weil pairing** | The Frobenius relation $F^{\mathsf T} J F = qJ$ (Poincaré duality on $H^1$). |
