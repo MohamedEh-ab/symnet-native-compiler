@@ -4,6 +4,14 @@ add_executable(unit_tests cpp/test_engine.cpp)
 target_link_libraries(unit_tests PRIVATE SymNet::native_cpp)
 add_test(NAME symnet_unit_tests COMMAND unit_tests --quick)
 
+add_executable(finite_field_test cpp/finite_field_test.cpp)
+target_link_libraries(finite_field_test PRIVATE SymNet::native_cpp)
+add_test(NAME SymNet.FiniteField COMMAND finite_field_test)
+
+add_executable(engine_integration_test cpp/engine_integration_test.cpp)
+target_link_libraries(engine_integration_test PRIVATE SymNet::native_cpp)
+add_test(NAME SymNet.EngineBridge COMMAND engine_integration_test)
+
 # The amalgamated single file must keep building and passing (guards against a stale copy).
 add_executable(single_header_check ${PROJECT_SOURCE_DIR}/single_header/symnet_native_single.cpp)
 target_link_libraries(single_header_check PRIVATE symnet_native_flags)
